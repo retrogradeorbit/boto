@@ -616,7 +616,7 @@ class Key(object):
                 return response
             elif response.status >= 200 and response.status <= 299:
                 self.etag = response.getheader('etag')
-                if self.etag != '"%s"'  % self.md5:
+                if self.md5 != False and self.etag != '"%s"'  % self.md5:
                     raise provider.storage_data_error(
                         'ETag from S3 did not match computed MD5')
                 return response
@@ -832,7 +832,13 @@ class Key(object):
         :param md5: If you need to compute the MD5 for any reason prior
                     to upload, it's silly to have to do it twice so this
                     param, if present, will be used as the MD5 values of
-                    the file.  Otherwise, the checksum will be computed.
+                    the file.  Otherwise, if set to None (the default),
+                    the checksum will be computed. If set to False, the
+                    transfer will be performed with no checksumming at
+                    all. This is not recommended as data integrity cannot
+                    be garunteed, but it is needed in some streaming 
+                    circumstances, and in these cases checksums will need 
+                    to be computed and compared after the fact.
 
         :type reduced_redundancy: bool
         :param reduced_redundancy: If True, this will set the storage
@@ -906,11 +912,14 @@ class Key(object):
             else:
                 chunked_transfer = False
                 if not md5:
-                    # compute_md5() and also set self.size to actual
-                    # size of the bytes read computing the md5.
-                    md5 = self.compute_md5(fp, size)
-                    # adjust size if required
-                    size = self.size
+                    if md5 != False:
+                        # compute_md5() and also set self.size to actual
+                        # size of the bytes read computing the md5.
+                        md5 = self.compute_md5(fp, size)
+                        # adjust size if required
+                        size = self.size
+                    else:
+                        size = None
                 elif size:
                     self.size = size
                 else:
@@ -921,11 +930,22 @@ class Key(object):
                     self.size = fp.tell() - spos
                     fp.seek(spos)
                     size = self.size
-                self.md5 = md5[0]
-                self.base64md5 = md5[1]
+                    
+                if md5 == False:
+                    # setting md5 to False indicates no md5 calculation
+                    # is to be performed or sent in the request header
+                    self.md5 = False
+                    self.base64md5 = None
+                    
+                    if not self.name:
+                        raise BotoClientError('No destination object name, nor key checksum, specified.')
+                else:
+                    self.md5 = md5[0]
+                    self.base64md5 = md5[1]
 
-            if self.name == None:
-                self.name = self.md5
+                    if self.name == None:
+                        self.name = self.md5
+                        
             if not replace:
                 if self.bucket.lookup(self.name):
                     return
@@ -984,7 +1004,13 @@ class Key(object):
         :param md5: If you need to compute the MD5 for any reason prior
                     to upload, it's silly to have to do it twice so this
                     param, if present, will be used as the MD5 values
-                    of the file.  Otherwise, the checksum will be computed.
+                    of the file.   Otherwise, if set to None (the default),
+                    the checksum will be computed. If set to False, the
+                    transfer will be performed with no checksumming at
+                    all. This is not recommended as data integrity cannot
+                    be garunteed, but it is needed in some streaming 
+                    circumstances, and in these cases checksums will need 
+                    to be computed and compared after the fact.
 
         :type reduced_redundancy: bool
         :param reduced_redundancy: If True, this will set the storage
@@ -1049,7 +1075,13 @@ class Key(object):
         :param md5: If you need to compute the MD5 for any reason prior
                     to upload, it's silly to have to do it twice so this
                     param, if present, will be used as the MD5 values
-                    of the file.  Otherwise, the checksum will be computed.
+                    of the file.   Otherwise, if set to None (the default),
+                    the checksum will be computed. If set to False, the
+                    transfer will be performed with no checksumming at
+                    all. This is not recommended as data integrity cannot
+                    be garunteed, but it is needed in some streaming 
+                    circumstances, and in these cases checksums will need 
+                    to be computed and compared after the fact.
 
         :type reduced_redundancy: bool
         :param reduced_redundancy: If True, this will set the storage
