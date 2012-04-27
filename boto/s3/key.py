@@ -881,18 +881,27 @@ class Key(object):
             # caller requests reading from beginning of fp.
             fp.seek(0, os.SEEK_SET)
         else:
-            spos = fp.tell()
-            fp.seek(0, os.SEEK_END)
-            if fp.tell() == spos:
-                fp.seek(0, os.SEEK_SET)
-                if fp.tell() != spos:
-                    # Raise an exception as this is likely a programming error
-                    # whereby there is data before the fp but nothing after it.
-                    fp.seek(spos)
-                    raise AttributeError(
-                     'fp is at EOF. Use rewind option or seek() to data start.')
-            # seek back to the correct position.
-            fp.seek(spos)
+            try:
+                spos = fp.tell()
+                fp.seek(0, os.SEEK_END)
+                if fp.tell() == spos:
+                    fp.seek(0, os.SEEK_SET)
+                    if fp.tell() != spos:
+                        # Raise an exception as this is likely a programming error
+                        # whereby there is data before the fp but nothing after it.
+                        fp.seek(spos)
+                        raise AttributeError(
+                        'fp is at EOF. Use rewind option or seek() to data start.')
+                # seek back to the correct position.
+                fp.seek(spos)
+            except IOError, ioe:
+                # we want to capture IOError errno 29: Illegal seek ( ESPIPE )
+                # FIFO's don't support seek() and tell() and will result in this error
+                # all other IOErrors should propagate upwards
+                import errno
+                if ioe.errno != errno.ESPIPE:
+                    raise
+                
 
         if reduced_redundancy:
             self.storage_class = 'REDUCED_REDUNDANCY'
